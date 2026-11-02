@@ -1,0 +1,9 @@
+{
+  "name": "Переезд · карта v6",
+  "id": "pereezd-map-v6-local",
+  "api": "1.0.0",
+  "main": "code.js",
+  "editorType": ["figma"],
+  "documentAccess": "dynamic-page",
+  "networkAccess": { "allowedDomains": ["none"] }
+}
