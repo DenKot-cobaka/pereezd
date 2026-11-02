@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && if [ -n \"$(git status --porcelain)\" ]; then git add -A && git commit -q -m \"Автокоммит: $(date '+%Y-%m-%d %H:%M')\" && git push -q origin main; fi",
+            "timeout": 120,
+            "statusMessage": "Коммит и пуш изменений в GitHub…"
+          }
+        ]
+      }
+    ]
+  }
+}
