@@ -194,7 +194,7 @@ textarea.in{height:96px;padding:12px 14px;resize:none}
 .ticks{display:flex;flex-direction:column;gap:9px;margin:6px 0}
 .ticks div{display:flex;gap:10px;font:600 13px/1.35 Inter}
 .ticks svg{width:16px;height:16px;flex:none;stroke:var(--primary);margin-top:1px}
-.toast{position:absolute;left:50%;bottom:118px;transform:translate(-50%,16px);background:var(--ink);color:#fff;padding:11px 18px;border-radius:14px;font:600 13px Inter;
+.toast{position:absolute;left:50%;top:8px;transform:translate(-50%,-12px);background:var(--ink);color:#fff;padding:11px 18px;border-radius:14px;font:600 13px Inter;
   opacity:0;transition:opacity .25s,transform .3s var(--ease);z-index:60;max-width:320px;text-align:center;pointer-events:none}
 .toast.show{opacity:1;transform:translate(-50%,0)}
 .push{position:absolute;left:10px;right:10px;top:10px;background:rgba(255,255,255,.96);backdrop-filter:blur(14px);border-radius:22px;padding:12px 14px;display:flex;gap:11px;
@@ -397,7 +397,7 @@ const fresh=()=>({
   chat:null,photos:{m:2,f:4,d:3},plan:'month',tariff:'month',
   qOpen:true,docSeg:'files',uploads:[],guide:'Всё',people:'Все',
   liked:{pool:1,chess:-1},quest:0,joined:{},mood:3,regDone:false,
-  smsCode:'4821',
+  smsCode:'4821',needs:['Школа','Детский сад'],districtPicked:false,failed:[],calMode:'load',ticketSet:false,dealLeft:0,
 });
 let st=fresh();
 const PRESETS={
@@ -414,6 +414,8 @@ const S1=['kid','city','district','budget'],S2=['add','compare','view','check'],
 const allDone=(o,keys)=>keys.every(k=>done(o[k]));
 const pct=(o,keys)=>keys.reduce((a,k)=>a+(done(o[k])?1:(o[k]||0)),0)/keys.length*100;
 const count=(o,keys)=>keys.filter(k=>done(o[k])).length;
+const plur=(n,a,b,c)=>{const m=n%10,h=n%100;return n+' '+(m===1&&h!==11?a:m>=2&&m<=4&&(h<12||h>14)?b:c)};
+const MONTHS=['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
 const money=n=>n.toLocaleString('ru-RU').replace(/[  ]/g,' ');
 /* демо-данные: только для быстрого перехода по экранам, в обычном сценарии список пуст, пока пользователь сам не добавит */
 const ensureVariants=()=>{if(!st.variants.length)st.variants=VARIANTS.map(v=>({...v}))};
@@ -455,6 +457,7 @@ const BAR=p=>`<div class="bar"><i style="width:${p}%"></i></div>`;
 const F=(label,val='',ph='',attrs='')=>`<div><label class="lbl">${label}</label><input class="in" value="${val}" placeholder="${ph}" ${attrs}></div>`;
 const CH=(items,on=[],o={})=>`<div class="chips ${o.cls||''}" ${o.single?'data-single':''} ${o.attrs||''}>${items.map(i=>{const [label,a]=Array.isArray(i)?i:[i,''];return `<button class="chip ${o.sm?'sm':''} ${o.beige?'beige':''} ${on.includes(label)?'on':''}" data-tg ${a}>${label}</button>`}).join('')}</div>`;
 const CHK=(t,s='',on=false,more='')=>`<button class="chk ${on?'on':''}" data-chk><span class="box">${I.check}</span><span class="grow stack"><span class="t">${t}</span>${s?`<span class="s">${s}</span>`:''}</span>${more}</button>`;
+const CHK2=(t,s,on,key)=>`<div class="chk ${on?'on':''}"><button class="box" data-chkbox aria-label="Отметить «${t}»">${I.check}</button><button class="grow stack" style="text-align:left" data-act="info" data-a="${key}"><span class="t">${t}</span><span class="s">${s}</span></button><span class="more" data-act="info" data-a="${key}">Читать ›</span></div>`;
 const KV=(rows)=>`<div class="list">${rows.map(r=>`<div class="li ${r[2]||''}"><span>${r[0]}</span><b>${r[1]}</b></div>`).join('')}</div>`;
 const SEG=(items,on,act)=>`<div class="seg" data-single>${items.map(([k,l])=>`<button class="${k===on?'on':''}" data-act="${act}" data-a="${k}">${l}</button>`).join('')}</div>`;
 const more=(t='Подробнее')=>`<span class="more">${t} ›</span>`;
@@ -472,11 +475,11 @@ const mapPh=(cap,h=150,spots=[[120,70,46,'#1F5F8B'],[230,100,38,'#F2A65A']])=>`<
    Главная (W10 / W86 / W63 / W64 / W82 / W65)
    ========================================================= */
 const S1N={kid:['Разговор с ребёнком','Подготовьте ребёнка к переезду — сценарий на 10 минут','W11'],city:['Город','Сводка агента по Москве: цены, транспорт, школы','W12'],district:['Район','Город выбран: Москва. Осталось выбрать район и посчитать бюджет','W13'],budget:['Бюджет','Район выбран: '+'{d}'+'. Осталось посчитать бюджет','W14']};
-const S2N={add:['Добавить варианты','Подготовка готова: Хорошёво-Мнёвники, бюджет до 90 000 ₽','W16'],compare:['Сравнить и выбрать','Вариантов в списке: {n}. Агент сравнит их по вашей анкете','W18'],view:['Просмотр','Запишитесь на просмотр — лично или по видеозвонку','W24'],check:['Проверить договор','Квартира выбрана. Проверьте собственника и договор','W27']};
+const S2N={add:['Добавить варианты','Подготовка готова: {d}, бюджет до {b} ₽','W16'],compare:['Сравнить и выбрать','Вариантов в списке: {n}. Агент сравнит их по вашей анкете','W18'],view:['Просмотр','Запишитесь на просмотр — лично или по видеозвонку','W24'],check:['Проверить договор','Квартира выбрана. Проверьте собственника и договор','W27']};
 const S3N={docs:['Документы','Квартира выбрана, договор проверен. Дальше — подготовка к дороге','W30'],tickets:['Билеты','Документы собраны. Добавьте билеты — агент подстроит перевозку и трансфер','W76'],cargo:['Перевозка вещей','Выберите дату и перевозчика','W78'],transfer:['Трансфер','Вещи в пути. Закажите трансфер до вокзала и от вокзала','W34'],accept:['Приёмка и акт','Сфотографируйте квартиру до заселения — соберём акт','W35']};
 const nextKey=(o,keys)=>keys.find(k=>!done(o[k]));
 function heroFor(id){
-  if(id==='W10') return {ov:'Начните здесь',t:'Этап 1 · Подготовка',x:'Город, район и бюджет — около 15 минут',cta:'Начать',go:'W72'};
+  if(id==='W10') return {ov:'Начните здесь',t:'Этап 1 · Подготовка',x:'Город, район и бюджет — около 15 минут',cta:'Начать',go:'W11'};
   if(id==='W65') return {ov:'Переезд завершён',t:'Вы заселились в Москве',x:'Все этапы пройдены, акт — во вкладке «Документы». Помочь освоиться на новом месте?',cta:'Помочь освоиться',go:'W36'};
   let set,keys,n,stage;
   if(id==='W86'){set=st.s1;keys=S1;n=S1N;stage=1}
@@ -484,7 +487,8 @@ function heroFor(id){
   else {set=st.s3;keys=S3;n=S3N;stage=3}
   const k=nextKey(set,keys)||keys[0];
   let [t,x,go]=n[k];
-  x=x.replace('{d}',st.district).replace('{n}',st.variants.length||3);
+  x=x.replace('{d}',st.district).replace('{b}',money(st.budget)).replace('{n}',st.variants.length||3);
+  if(k==='docs'&&st.dealLeft>0){x='Квартира выбрана, но в договоре не проверено: '+plur(st.dealLeft,'пункт','пункта','пунктов')+'. Дальше — подготовка к дороге'}
   if(k==='cargo'&&st.s3.cargo===.5){x='Дата выбрана: загрузка 12 авг, доставка 15 авг. Осталось выбрать перевозчика';go='W31'}
   if(k==='district'&&st.s1.district===.5){go='W13'}
   if(k==='add'&&st.variants.length){go='W18'}
@@ -494,7 +498,7 @@ function soonFor(id){
   return ({
     W10:['Скоро','14 августа — переезд, до него 3 месяца',''],
     W86:['Скоро','1 июня — выбрать район, чтобы успеть с жильём','data-go="W13"'],
-    W63:['Новое','3 свежих объявления в Хорошёво-Мнёвниках','data-act="autopick"'],
+    W63:['Новое','3 свежих объявления в районе '+st.district,'data-act="autopick"'],
     W64:['Скоро','1 августа — заселение по договору','data-act="doc" data-a="contract"'],
     W82:['Скоро','14 августа — поезд 020С, отправление 21:40','data-go="W76"'],
     W65:['Скоро','Через месяц спросим, как вы освоились',''],
@@ -559,7 +563,8 @@ def('W05',0,'Регистрация',()=>page({
     ${F('Телефон или почта','','+7 900 000-00-00','id="rphone" inputmode="tel"')}
     <button class="chk mt4" data-chk id="ragree"><span class="box">${I.check}</span><span class="s" style="color:var(--ink)">Принимаю условия использования и согласен на обработку данных</span></button>
     <div class="errtxt" id="rerr" hidden></div>`,
-  foot:B('Продолжить','data-act="register"')+L('Уже есть аккаунт? Войти','data-go="W04" data-replace')}));
+  foot:B('Продолжить','data-act="register"')+L('Уже есть аккаунт? Войти','data-go="W04" data-replace')}),
+  el=>{el.querySelectorAll('input').forEach(i=>i.addEventListener('input',()=>{i.classList.remove('err');el.querySelector('#rerr').hidden=true}));el.querySelector('#ragree').addEventListener('click',()=>{el.querySelector('#rerr').hidden=true})});
 
 def('W04',0,'Вход',()=>page({
   top:H('',{agent:false}),
@@ -778,10 +783,11 @@ def('W11',1,'Разговор с ребёнком',()=>page({
   body:`<div class="card xs" style="color:var(--ink);padding:10px 14px">Советы детского психолога для возраста</div>
     ${CH(['4–6','7–11','12–17'],['7–11'],{single:true})}
     <div data-cl data-total="4" class="stack" style="gap:8px">
-    ${CHK('Как начать разговор','Сценарий на 10 минут',true,`<span class="more" data-act="info" data-a="talk">Подробнее ›</span>`)}
-    ${CHK('Сказка о переезде','Читать вместе · 5 мин',false,`<span class="more" data-act="info" data-a="tale">Подробнее ›</span>`)}
-    ${CHK('Игра «Моя новая комната»','Ребёнок сам выбирает, что возьмёт',false,`<span class="more" data-act="info" data-a="game">Подробнее ›</span>`)}
-    ${CHK('Частые вопросы детей','И как на них ответить',false,`<span class="more" data-act="info" data-a="faq">Подробнее ›</span>`)}</div>
+    ${CHK2('Как начать разговор','Сценарий на 10 минут',true,'talk')}
+    ${CHK2('Сказка о переезде','Читать вместе · 5 мин',false,'tale')}
+    ${CHK2('Игра «Моя новая комната»','Ребёнок сам выбирает, что возьмёт',false,'game')}
+    ${CHK2('Частые вопросы детей','И как на них ответить',false,'faq')}</div>
+    <div class="note">Нажмите на карточку, чтобы прочитать; галочка — отметить, что сделали</div>
     ${AG('Вовлеките ребёнка в выбор: покажите ему фото районов и школ')}`,
   foot:B('Готово — к шагам этапа','data-act="stepDone" data-a="s1.kid"')}));
 
@@ -799,16 +805,21 @@ def('W12',1,'Город · сводка агента',()=>page({
     <div class="note">Источники: открытые данные города, площадки аренды</div>`,
   foot:B('Готово — к шагам этапа','data-act="stepDone" data-a="s1.city"')}));
 
-def('W13',1,'Районы · карта',()=>page({
+const DISTRICTS=[
+  {n:'Хорошёво-Мнёвники',f:['Школа','Детский сад','Метро','Парк'],rent:85,time:25,s:'Школа и сад рядом, метро в 7 минутах'},
+  {n:'Митино',f:['Школа','Детский сад','Парк','Тихо','Недорого'],rent:78,time:40,s:'Школа рядом, тихо, парк у реки'},
+];
+const NEEDS=['Школа','Детский сад','Метро','Парк','Тихо','Недорого'];
+function districtList(){const need=st.qOpen?st.needs:[];return DISTRICTS.map(d=>({...d,k:need.filter(x=>d.f.includes(x)).length})).sort((a,b)=>b.k-a.k||a.time-b.time)}
+def('W13',1,'Районы · карта',()=>{const list=districtList();const nn=st.qOpen?st.needs.length:0;return page({
   top:H('Районы'),
   body:`${st.qOpen?`<div class="agent"><div class="ah">✦ Агент · один вопрос</div>Что важно рядом с домом? С ответом подбор районов будет точнее
-      <div class="mt8">${CH(['Школа','Детский сад','Метро','Парк','Тихо','Недорого'],['Школа','Детский сад'],{sm:true,beige:true})}</div>
+      <div class="mt8 chips">${NEEDS.map(x=>`<button class="chip sm beige ${st.needs.includes(x)?'on':''}" data-act="need" data-a="${x}">${x}</button>`).join('')}</div>
       <button class="link" style="margin:6px 0 0;padding:4px 0;text-align:left" data-act="skipQ">Пропустить — покажем популярные районы</button></div>`:''}
-    ${mapPh(st.qOpen?'Карта: районы со школой и садом рядом':'Карта: популярные районы',140)}
-    <button class="card" data-act="dist" data-a="Хорошёво-Мнёвники"><div class="row"><span class="t">Хорошёво-Мнёвники</span>${more('Бюджет')}</div><div class="s mt4">Школа и сад рядом · аренда 2-комн. ≈ 85 тыс · 25 мин до центра</div></button>
-    <button class="card" data-act="dist" data-a="Митино"><div class="row"><span class="t">Митино</span>${more('Бюджет')}</div><div class="s mt4">Школа рядом · ≈ 78 тыс · 40 мин до центра</div></button>
+    ${mapPh(st.qOpen?'Карта: районы по вашим ответам':'Карта: популярные районы',140)}
+    ${list.map(d=>{const sel=st.districtPicked&&st.district===d.n;return `<div class="card" style="${sel?'box-shadow:inset 0 0 0 2px var(--primary)':''}"><div class="row"><span class="t">${d.n}</span>${sel?'<span class="badge">Выбран</span>':''}</div><div class="s mt4">${d.s} · аренда 2-комн. ≈ ${d.rent} тыс · ${d.time} мин до центра</div>${nn?`<div class="xs mt4" style="color:var(--primary);font-weight:600">Подходит по ${d.k} из ${nn} ${nn===1?'пункту':'пунктам'}</div>`:''}<div class="row mt8" style="gap:8px"><button class="btn sm" style="${sel?'background:var(--bg);color:var(--ink)':''}" data-act="pickDistrict" data-a="${d.n}">${sel?'Выбран ✓':'Выбрать район'}</button><button class="btn sm sec" style="background:var(--bg)" data-act="dist" data-a="${d.n}">Бюджет ›</button></div></div>`}).join('')}
     <div class="spacer"></div>${L('Сравнить районы с агентом','data-go="W54"')}`,
-  foot:B('Готово — к шагам этапа','data-act="stepDone" data-a="s1.district"')}));
+  foot:B(st.districtPicked?'Готово — к шагам этапа':'Выберите район выше',st.districtPicked?'data-act="stepDone" data-a="s1.district"':'disabled')})});
 
 function calcBudget(){const r=RENT[st.district]||RENT['Хорошёво-Мнёвники'];const i=st.rooms-1;const rent=r[i],z=ZKU[i];return {rent,z,month:rent+z,dep:rent,com:Math.round(rent/2),move:48000,once:rent+Math.round(rent/2)+48000}}
 def('W14',1,'Калькулятор стоимости',()=>{const b=calcBudget();return page({
@@ -818,17 +829,18 @@ def('W14',1,'Калькулятор стоимости',()=>{const b=calcBudget(
     <div class="sec">Сколько комнат нужно</div>
     <div class="chips" data-single>${['1','2','3','4+'].map((r,i)=>`<button class="chip ${st.rooms===i+1?'on':''}" style="width:42px;padding:0" data-act="rooms" data-a="${i+1}">${r}</button>`).join('')}</div>
     <div class="sec">Каждый месяц</div>
-    ${KV([['Аренда (средняя в районе)','≈ '+money(b.rent)+' ₽'],['ЖКУ (в среднем)','≈ '+money(b.z)+' ₽'],['Итого в месяц','≈ '+money(b.month)+' ₽','total']])}
+    ${KV([['Аренда (средняя в районе)','≈ '+money(b.rent)+' ₽'],['ЖКУ (в среднем)','≈ '+money(b.z)+' ₽'],['Итого в месяц','≈ '+money(b.month)+' ₽','total'],['Ваш бюджет','до '+money(st.budget)+' ₽']])}
+    ${b.month>st.budget?`<div class="card warn"><div class="wh">${I.warn}Выше бюджета на ${money(b.month-st.budget)} ₽/мес</div><div class="s">Агент подскажет, как уложиться: район дешевле или меньше комнат</div></div>`:`<div class="card" style="font:600 13px Inter;color:var(--ok)">✓ Укладывается в бюджет — запас ${money(st.budget-b.month)} ₽/мес</div>`}
     <div class="sec">Разово при заселении</div>
     ${KV([['Залог (обычно = 1 мес.)','≈ '+money(b.dep)+' ₽'],['Комиссия (обычно 50%)','≈ '+money(b.com)+' ₽'],['Перевозка Ростов → Москва','≈ '+money(b.move)+' ₽'],['Итого разово','≈ '+money(b.once)+' ₽','total']])}`,
-  foot:B('Готово — к шагам этапа','data-act="budgetDone"')+B('Не укладываюсь в бюджет','data-go="W15"','sec')+L('Сразу перейти к подбору жилья','data-act="toFlats"')})});
+  foot:(b.month>st.budget?B('Посмотреть, как уложиться','data-go="W15"')+B('Оставить и продолжить','data-act="keepBudget"','sec'):B('Готово — к шагам этапа','data-act="budgetDone"')+B('Не укладываюсь в бюджет','data-go="W15"','sec'))+L('Сразу перейти к подбору жилья','data-act="toFlats"')})});
 
-def('W15',1,'Бюджет превышен',()=>{const b=calcBudget();const over=b.month-st.budget;return page({
+def('W15',1,'Бюджет превышен',()=>{const b=calcBudget();const over=b.month-st.budget;const i=st.rooms-1;const mit=RENT['Митино'][i]+ZKU[i];const one=RENT['Хорошёво-Мнёвники'][0]+ZKU[0];const isMit=st.district==='Митино';return page({
   top:H('Полная стоимость'),
   body:`<div class="card warn"><div class="wh">${I.warn}${over>0?'Выше бюджета на '+money(over)+' ₽/мес':'Почти на пределе бюджета'}</div><div class="s">Ваш бюджет — до ${money(st.budget)} ₽, а в этом районе выйдет ~${money(b.month)} ₽</div></div>
-    ${AG('Митино дешевле на ~12 000 ₽/мес, школа так же в 7 минутах. Посмотрим?')}
-    <button class="card" data-act="dist" data-a="Митино"><div class="row"><span class="t">Митино</span>${more()}</div><div class="s mt4">~79 000 ₽/мес · совпадение 88%</div></button>
-    <button class="card" data-act="roomsTo1"><div class="row"><span class="t">1-комн. в Хорошёво</span>${more()}</div><div class="s mt4">~74 000 ₽/мес · совпадение 80%</div></button>`,
+    ${isMit?AG('Уложиться можно, если взять квартиру на комнату меньше или поднять бюджет'):AG(`Митино дешевле на ~${money(b.month-mit)} ₽/мес, школа так же в 7 минутах. Посмотрим?`)}
+    ${isMit?'':`<button class="card" data-act="dist" data-a="Митино"><div class="row"><span class="t">Митино, ${st.rooms}-комн.</span>${more()}</div><div class="s mt4">~${money(mit)} ₽/мес с ЖКУ · совпадение 88%</div></button>`}
+    <button class="card" data-act="roomsTo1"><div class="row"><span class="t">1-комн. в Хорошёво</span>${more()}</div><div class="s mt4">~${money(one)} ₽/мес с ЖКУ · совпадение 80%</div></button>`,
   foot:B('Показать районы дешевле','data-go="W13"')+B('Изменить бюджет','data-act="edit" data-a="budget"','sec')+L('Оставить как есть','data-act="keepBudget"')})});
 
 /* ---------- Карта 2: Подбор жилья ---------- */
@@ -844,14 +856,14 @@ def('W73',2,'Этап 2 · Подбор жилья',()=>{const s=st.s2,c=count(s
 
 def('W16',2,'Жильё · добавить ссылку',()=>page({tab:'flat',
   top:H('Жильё',{back:false,agent:false}),
-  body:`<div class="card s" style="color:var(--ink);padding:10px 14px">${st.variants.length?'В списке '+st.variants.length+' варианта. Добавьте ещё':'Пока нет вариантов. Выберите, как их добавить'}</div>
+  body:`<div class="card s" style="color:var(--ink);padding:10px 14px">${st.variants.length?'В списке '+plur(st.variants.length,'вариант','варианта','вариантов')+'. Добавьте ещё':'Пока нет вариантов. Выберите, как их добавить'}</div>
     <div class="card"><div class="row"><span class="t">✦ Автоподбор</span><span class="badge">Семья+</span></div>
       <div class="s mt4">Агент сам ищет квартиры на площадках-партнёрах по вашей анкете и добавляет подходящие в список</div>
       <div class="mt8">${B('Включить автоподбор','data-act="autopick"','sm')}</div>
       <div class="xs center mt8">Мониторинг 24/7: пуш о новых вариантах и снижении цены</div></div>
     <div class="xs center" style="font-weight:600;margin:4px 0">или добавьте сами</div>
     <div class="card"><label class="lbl" style="margin-top:0">Ссылка на объявление</label>
-      <input class="in" id="flatlink" placeholder="https://…" style="background:var(--bg)" inputmode="url">
+      <input class="in" id="flatlink" placeholder="https://…" style="background:var(--bg)" inputmode="url" oninput="this.classList.remove('err');document.getElementById('linkerr').hidden=true"><div class="errtxt mt4" id="linkerr" hidden>Вставьте ссылку на объявление — например, с Циана или Авито</div>
       <div class="mt8">${B('Добавить по ссылке','data-act="addLink"','sm')}</div>
       ${L('Заполнить вручную','data-go="W58" style="margin-top:6px"')}</div>`}));
 
@@ -863,10 +875,11 @@ def('W17',2,'Ссылка не распознана',()=>page({tab:'flat',
 
 def('W58',2,'Добавить вручную',()=>page({
   top:H('Новый вариант'),
-  body:`${F('Адрес','ул. Генерала Глаголева, 10','','id="maddr"')}
-    ${F('Цена в месяц','85 000 ₽','','id="mprice" inputmode="numeric"')}
-    <label class="lbl">Комнат</label>${CH(['1','2','3','4+'],['2'],{single:true,sm:true})}
-    <div class="grid2 mt4"><div>${F('Площадь, м²','54','','id="marea" inputmode="numeric"')}</div><div>${F('Этаж','3 из 9','')}</div></div>
+  body:`${F('Адрес','','Например: ул. Генерала Глаголева, 10','id="maddr"')}
+    ${F('Цена в месяц, ₽','','Например: 85 000','id="mprice" inputmode="numeric"')}
+    <label class="lbl">Комнат</label>${CH(['1','2','3','4+'],[],{single:true,sm:true})}
+    <div class="grid2 mt4"><div>${F('Площадь, м²','','54','id="marea" inputmode="numeric"')}</div><div>${F('Этаж','','3 из 9','')}</div></div>
+    <div class="errtxt" id="merr" hidden>Укажите адрес и цену — без них агент не сравнит вариант</div>
     ${F('Контакт или ссылка (необязательно)','','+7 900 …')}
     <div class="row" style="justify-content:flex-start;gap:12px;margin-top:6px"><button class="add-ph" data-act="upload" data-a="photo">+ Фото</button><span class="xs">Фото помогут агенту сравнить варианты</span></div>`,
   foot:B('Сохранить вариант','data-act="saveManual"')}));
@@ -877,14 +890,16 @@ def('W18',2,'Список сравнения',()=>{const v=[...st.variants];cons
     return `<div class="card row top-a" role="button" tabindex="0" data-act="${pick?'pickVar':'openVar'}" data-a="${i}" style="justify-content:flex-start;gap:12px;cursor:pointer;${on?'box-shadow:inset 0 0 0 2px var(--primary)':''}">
       ${pick?`<span class="box" style="margin-top:16px;${on?'background:var(--primary);border-color:var(--primary)':''}">${I.check.replace('<svg','<svg style="opacity:'+(on?1:0)+'"')}</span>`:''}<span class="thumb"></span>
       <div class="stack grow"><span class="t">${x.t} · ${x.d}</span><span class="xs mt4">${money(x.price)} ₽ · школа ${x.school} м · ${x.m}%</span></div>
-      ${pick?'':`<div class="stack" style="align-items:flex-end;gap:10px">${more()}<button class="more" style="color:var(--soft);font-weight:500" data-act="delVar" data-a="${i}">Удалить</button></div>`}</div>`};
+      ${pick?'':`<button class="rb" style="width:34px;height:34px;box-shadow:none;background:var(--bg);font:700 16px Inter;flex:none" data-act="varMenu" data-a="${i}" aria-label="Действия с вариантом">⋯</button>`}</div>`};
+  const many=st.variants.length>3&&!st.plus;
   return page({tab:'flat',
   top:H('Мои варианты · '+v.length,{back:false,right:pick?'<span></span>':`<button class="rb" data-go="W16" aria-label="Добавить">${I.plus}</button>`}),
-  body:`${pick?`<div class="card" style="padding:11px 14px"><span class="t" style="font-size:14px">Бесплатное сравнение</span><div class="xs mt4">Отметьте до 3 вариантов — агент сравнит их. Остальные останутся в списке</div></div>`
-      :`<div class="chips" data-single>${[['m','По совпадению'],['price','Цена'],['school','Школа ближе']].map(([k,l])=>`<button class="chip ${st.sort===k?'on':''}" data-act="sort" data-a="${k}">${l}</button>`).join('')}</div>`}
+  body:`${pick?`<div class="card" style="padding:11px 14px"><span class="t" style="font-size:14px">Бесплатное сравнение</span><div class="xs mt4">Отметьте до 3 вариантов — агент сравнит их. Остальные останутся в списке</div></div>`:''}
+      ${`<div class="chips" data-single>${[['m','По совпадению'],['price','Цена'],['school','Школа ближе']].map(([k,l])=>`<button class="chip ${st.sort===k?'on':''}" data-act="sort" data-a="${k}">${l}</button>`).join('')}</div>`}
     ${v.map(card).join('')||'<div class="note center mt16">В списке пока пусто</div>'}
-    ${pick?'':`<div class="note">${st.plus?'С Семья+ сравнение без лимита':'Бесплатно можно сравнивать до 3 вариантов'}</div>`}`,
+    ${pick?'':`<div class="note">${st.plus?'С Семья+ сравнение без лимита':'Бесплатно агент сравнивает до 3 вариантов за раз'}</div>`}`,
   foot:pick?B(`Сравнить выбранные · ${n} из 3`,n>=2?'data-act="compareFree"':'disabled')+L('Отмена','data-act="pickCancel"')
+    :many?B('Выбрать 3 и сравнить бесплатно','data-act="pickStart"')+B('Сравнить все с Семья+','data-act="compare"','sec')+L('+ Добавить вариант','data-go="W16"')
     :B('Сравнить с агентом','data-act="compare"')+B('+ Добавить вариант','data-go="W16"','sec')})});
 
 def('W57',2,'Автоподбор',()=>page({tab:'flat',
@@ -895,20 +910,21 @@ def('W57',2,'Автоподбор',()=>page({tab:'flat',
     <div class="spacer"></div>${L('Изменить критерии поиска','data-go="W55"')}`,
   foot:B('Добавить все в сравнение','data-act="addAllAuto"')}));
 
+const vlabel=x=>x.d+', '+(x.t.split(', ')[1]||x.t);
 def('W23',2,'Сводка агента',()=>{const v=[...cmpList()].sort((a,b)=>b.m-a.m);if(v.length<2)return page({top:H('Сводка агента'),body:`<div class="spacer"></div>${AG('Чтобы сравнить, добавьте хотя бы 2 варианта — по ссылке с любого сайта или вручную')}<div class="spacer"></div>`,foot:B('Добавить вариант','data-go="W16"')});const n=v.length;const best=st.variants.indexOf(v[0]);return page({
   top:H('Сводка агента'),
-  body:`${AG(`Лучше всего вам подходит №1: школа в ${v[0].school} м, парк рядом и в рамках бюджета`)}
+  body:`${AG(`Лучше всего вам подходит ${vlabel(v[0])}: школа в ${v[0].school} м, ${v[0].park==='—'?'':'парк рядом, '}${money(v[0].price)} ₽ в месяц`)}
     <div style="overflow-x:auto;margin:0 -16px;padding:0 16px;scrollbar-width:none"><div class="tbl" style="--n:${n};min-width:${n>3?110+n*86:0}px">
-      <div class="tr th"><span></span>${v.map((x,i)=>`<span class="${i===0?'hl best':''}">№${i+1}</span>`).join('')}</div>
-      ${[['Район',x=>x.d],['Цена/мес',x=>Math.round(x.price/1000)+' тыс'],['До школы',x=>x.school+' м'],['Парк',x=>x.park],['До работы',x=>x.work+' мин'],['Совпадение',x=>x.m+'%']].map(([l,f])=>`<div class="tr"><span>${l}</span>${v.map((x,i)=>`<span class="${i===0?'hl best':''}">${f(x)}</span>`).join('')}</div>`).join('')}
+      <div class="tr th"><span></span>${v.map((x,i)=>`<span class="${i===0?'hl best':''}" style="font-size:11px;line-height:1.25">${i===0?'★ ':''}${vlabel(x)}</span>`).join('')}</div>
+      ${[['Цена/мес',x=>Math.round(x.price/1000)+' тыс'],['До школы',x=>x.school+' м'],['Парк',x=>x.park],['До работы',x=>x.work+' мин'],['Совпадение',x=>x.m+'%']].map(([l,f])=>`<div class="tr"><span>${l}</span>${v.map((x,i)=>`<span class="${i===0?'hl best':''}">${f(x)}</span>`).join('')}</div>`).join('')}
       <div class="tr"><span></span>${v.map((x,i)=>`<span class="${i===0?'hl':''}"><button class="chip sm ${i===0?'on':''}" data-act="openVar" data-a="${st.variants.indexOf(x)}">Подробнее</button></span>`).join('')}</div>
     </div></div>
     <div class="note">Сводка обновится после просмотров и вашей оценки квартир</div>`,
-  foot:B('Подробнее о №1',`data-act="openVar" data-a="${best}"`)})},()=>{st.s2.compare=1});
+  foot:B('Подробнее: '+vlabel(v[0]),`data-act="openVar" data-a="${best}"`)})},()=>{st.s2.compare=1});
 
 def('W24',2,'Карточка варианта',()=>{const v=curVar();const top3=st.variants.slice(0,Math.max(3,0));return page({
-  top:H(`Вариант ${st.vi+1} из ${st.variants.length}`),
-  body:`<div class="seg" data-single>${st.variants.slice(0,5).map((x,i)=>`<button class="${i===st.vi?'on':''}" data-act="vi" data-a="${i}">№${i+1}</button>`).join('')}</div>
+  top:H(vlabel(v)),
+  body:`<div class="chips nowrap" data-single>${st.variants.map((x,i)=>`<button class="chip sm ${i===st.vi?'on':''}" data-act="vi" data-a="${i}">${vlabel(x)}</button>`).join('')}</div>
     <div class="ph" style="height:120px;background:#fff">Фото квартиры (с площадки)</div>
     <div class="card"><div class="h2" style="font-size:20px">${v.t}</div><div class="s mt4">${v.dl} · ${money(v.price)} ₽/мес · ${v.floor}</div></div>
     <div class="card"><div class="row"><span class="t">${v.sn}</span><b style="font:700 12px Inter">${v.school} м</b></div><div class="s">${v.sr}</div></div>
@@ -926,9 +942,10 @@ def('W61',2,'Площадка аренды (внешний модуль)',()=>{c
 
 function booking(fmt){const v=curVar();const b=st.booking;return page({
   top:H('Запись на просмотр'),
-  body:`<div class="note" style="color:var(--ink)">${v.t} · ${v.d} · вариант №${st.vi+1}</div>
+  body:`<div class="note" style="color:var(--ink)">${v.t} · ${v.d} · ${v.addr}</div>
     <div class="card"><label class="lbl" style="margin-top:0">Формат</label><div class="chips" data-single><button class="chip sm beige ${fmt==='live'?'on':''}" data-act="fmt" data-a="live">Лично</button><button class="chip sm beige ${fmt==='video'?'on':''}" data-act="fmt" data-a="video">По видеозвонку</button></div></div>
-    <div class="grid2">${F('Дата',b.date,'','id="bdate"')}${F('Время',b.time,'','id="btime"')}</div>
+    <div class="grid2">${F('Дата',b.iso||'','','id="bdate" type="date" min="2026-10-01"')}${F('Время',b.iso?b.time:'','','id="btime" type="time" step="1800"')}</div>
+    <div class="errtxt" id="berr" hidden>Выберите дату и время просмотра</div>
     ${F('Контакт',v.owner+', собственник · +7 900 •••','','readonly')}
     <div class="card row mt4"><span class="t" style="font-size:14px">Напомнить за 2 часа</span><button class="sw on" data-sw aria-label="Напомнить"></button></div>
     ${fmt==='video'?`<div class="card"><span class="t" style="font-size:13.5px">Как пройдёт видеопросмотр</span><div class="s mt4">Звонок — прямо в приложении. Собственнику придёт ссылка по СМС, ему ничего не нужно устанавливать. Подходит, если вы ещё в другом городе</div></div>${AG('Во время звонка подскажу, что попросить показать. Снимки экрана сохраню в карточку варианта')}`:AG('Подготовлю чек-лист к просмотру — он появится во вкладке «Документы»')}`,
@@ -943,7 +960,7 @@ def('W60',2,'Просмотр запланирован',()=>{const v=curVar();re
     <button class="card" data-go="W25"><div class="row"><span class="t">Чек-лист к просмотру</span>${more('Открыть')}</div><div class="s mt4">6 пунктов: фото, сантехника, шум…</div></button>
     <button class="card" data-act="toast" data-a="Добавлено в календарь: ${st.booking.date}, ${st.booking.time}"><div class="row"><span class="t">Добавить в календарь</span>${more('Добавить')}</div></button>
     <button class="card" data-act="info" data-a="route"><div class="row"><span class="t">Маршрут до квартиры</span>${more('Открыть')}</div><div class="s mt4">45 мин от вокзала</div></button>`,
-  foot:B('К моим вариантам','data-act="tabGo" data-a="W18"')+B('Перенести или отменить','data-go="W59"','sec')})});
+  foot:B('К моим вариантам','data-act="tabGo" data-a="W18"')+B('Перенести','data-go="W59"','sec')+L('Отменить просмотр','data-act="cancelView"')})});
 
 def('W84',2,'Видеопросмотр запланирован',()=>{const v=curVar();return page({
   top:H('Видеопросмотр'),
@@ -976,7 +993,7 @@ def('W25',2,'Чек-лист просмотра',()=>page({tab:'flat',
   foot:B('Завершить и оценить','data-go="W48"')}));
 
 const lock=(time,date,text,go)=>page({cls:'lock',top:'',
-  body:`<div class="big">${time}</div><div class="date">${date}</div>
+  body:`<div class="center mt8"><span class="badge soft" style="height:26px;padding:0 12px">Так придёт уведомление на телефон</span></div><div class="big" style="margin-top:40px">${time}</div><div class="date">${date}</div>
     <button class="notif" data-go="${go}" data-replace><span class="ai" style="width:38px;height:38px;border-radius:10px;background:var(--accent);flex:none"></span><span class="grow stack"><span class="row"><b style="font:700 13px Inter">Переезд с семьёй</b><span class="xs">сейчас</span></span><span style="font-size:13px;line-height:1.35">${text}</span></span></button>
     <div class="xs center mt16">Нажмите на уведомление</div>`});
 def('W48',2,'Пуш после просмотра',()=>lock('19:45','суббота, 25 октября','Как прошёл просмотр? Оцените квартиру — агент обновит сводку','W26'));
@@ -984,9 +1001,9 @@ def('W49',3,'Пуш через месяц',()=>lock('10:12','суббота, 15 
 
 def('W26',2,'Оценка просмотра',()=>{const v=curVar();return page({
   top:H('Как вам квартира?'),
-  body:`<div class="card"><div class="xs" style="color:var(--ink)">${v.t} · ${v.d}</div><div class="stars mt8" id="stars">${[1,2,3,4,5].map(i=>`<button class="${i<=(st.rate||5)?'on':''}" data-act="rate" data-a="${i}" aria-label="${i}">${I.star}</button>`).join('')}</div></div>
+  body:`<div class="card"><div class="xs" style="color:var(--ink)">${v.t} · ${v.d}</div><div class="stars mt8" id="stars">${[1,2,3,4,5].map(i=>`<button class="${i<=(st.rate||0)?'on':''}" data-act="rate" data-a="${i}" aria-label="${i}">${I.star}</button>`).join('')}</div></div>
     <div class="sec">Что понравилось / не понравилось</div>
-    ${CH(['Светло','Тихо','Хороший ремонт','Шумно','Нет лифта','Старая сантехника'],['Светло','Тихо','Нет лифта'])}
+    ${CH(['Светло','Тихо','Хороший ремонт','Шумно','Нет лифта','Старая сантехника'],[])}
     <div class="sec">Комментарий</div><textarea class="in" placeholder="Например: владелец готов сделать скидку"></textarea>
     <button class="add-ph" data-act="upload" data-a="photo">+ Фото</button>`,
   foot:B('Выбрать эту квартиру','data-act="pickFlat"')+B('Сохранить и обновить сводку','data-act="saveRate"','sec')})});
@@ -1013,7 +1030,7 @@ def('W29',2,'Жильё выбрано',()=>page({
   body:`<div class="spacer"></div><div class="icon-tile" style="color:var(--primary)">${I.tick}</div>
     <div class="h2 center mt8">Жильё выбрано!</div>
     <div class="card s center" style="color:var(--ink)">Адрес добавлен в план. Переезд можно начать, когда будете готовы: этап «Переезд и адаптация» ждёт на главной</div><div class="spacer"></div>`,
-  foot:B('К шагам этапа','data-act="flatDone"')}));
+  foot:B('На главную — к этапу «Переезд»','data-act="flatDone"')}));
 
 /* ---------- Карта 3: Переезд и адаптация ---------- */
 def('W74',3,'Этап 3 · Переезд и адаптация',()=>{const s=st.s3,c=count(s,S3),nk=nextKey(s,S3);const lbl={docs:'документы',tickets:'билеты',cargo:'перевозка вещей',transfer:'трансфер',accept:'приёмка и акт'};const go={docs:'W30',tickets:'W76',cargo:s.cargo===.5?'W31':'W78',transfer:'W34',accept:'W35'};return page({
@@ -1044,16 +1061,17 @@ def('W30',3,'Документы (шаг)',()=>page({
     ${AG('Напомню за 7 дней до переезда, если что-то не собрано')}`,
   foot:B('Готово — к шагам этапа','data-act="stepDone" data-a="s3.docs"')}));
 
-def('W76',3,'Билеты',()=>{const t=st.ticket;return page({
+def('W76',3,'Билеты',()=>{const t=st.ticketSet?st.ticket:{mode:'Поезд',num:'',dep:'',arr:'',train:''};return page({
   top:H('Билеты'),
   body:`<div class="note" style="color:var(--ink)">Добавьте билеты — агент подстроит перевозку и трансфер под время в пути</div>
     ${CH(['Поезд','Самолёт','Автобус','На машине'],[t.mode],{single:true,sm:true})}
-    ${F('Номер билета или заказа',t.num,'')}
-    <div class="grid2">${F('Отправление',t.dep,'')}${F('Прибытие',t.arr,'')}</div>
-    ${F('Поезд / рейс',t.train,'')}
+    ${F('Номер билета или заказа',t.num,'Например: 7012 3456 7890','id="tnum"')}
+    <div class="grid2">${F('Отправление',t.dep,'14 авг, 21:40','id="tdep"')}${F('Прибытие',t.arr,'15 авг, 9:10','id="tarr"')}</div>
+    ${F('Поезд / рейс',t.train,'Например: 020С, вагон 7','id="ttrain"')}
+    <div class="errtxt" id="terr" hidden>Укажите номер билета или рейс — или загрузите билет</div>
     <button class="card" data-act="upload" data-a="ticket"><div class="row"><span class="t">Загрузить билет</span>${more('Загрузить')}</div><div class="s mt4">PDF или фото — сохраним в «Документы»</div></button>
     <button class="card" data-act="pickTickets"><div class="row"><span class="t">✦ Подобрать билеты</span><span class="badge">Семья+</span></div><div class="row mt4"><span class="xs">Агент найдёт поезда и рейсы под дату переезда и семью</span>${more('Подобрать')}</div></button>`,
-  foot:B('Сохранить билет','data-act="stepDone" data-a="s3.tickets"')})});
+  foot:B('Сохранить билет','data-act="saveTicket"')})});
 
 def('W77',3,'Подбор билетов (Семья+)',()=>page({
   top:H('Подбор билетов'),
@@ -1067,6 +1085,7 @@ def('W77',3,'Подбор билетов (Семья+)',()=>page({
 def('W78',3,'Перевозка · дата и адреса',()=>{const days=[];const start=6;for(let i=0;i<start;i++)days.push('<i></i>');for(let d=1;d<=31;d++){const cls=d===st.load||d===st.deliver?'sel':d===14?'mark':'';days.push(`<button class="${cls}" data-act="day" data-a="${d}">${d}</button>`)}return page({
   top:H('Перевозка вещей'),
   body:`<div class="note" style="color:var(--ink)">Шаг 1 из 2 · когда и откуда забрать вещи</div>
+    ${SEG([['load','Загрузка · '+st.load+' авг'],['deliver','Доставка · '+st.deliver+' авг']],st.calMode||'load','calMode')}
     <div class="cal"><div class="mh">Август 2027</div><div class="g">${['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].map(x=>`<span>${x}</span>`).join('')}${days.join('')}</div>
       <div class="xs mt8" style="color:var(--ink)">● ${st.load} — загрузка в Ростове · ● ${st.deliver} — доставка в Москве · ● 14 — ваш поезд</div></div>
     <div class="grid2">${F('Загрузка',st.load+' авг, 10:00','')}${F('Доставка',st.deliver+' авг, 12:00–16:00','')}</div>
@@ -1078,7 +1097,7 @@ def('W31',3,'Перевозчики',()=>{const sorts={price:(a,b)=>a.price-b.pr
   top:H('Перевозка вещей'),
   body:`<div class="card xs" style="color:var(--ink);padding:10px 14px">Загрузка ${st.load} авг → доставка ${st.deliver} авг · 2-комн. квартира и 24 коробки</div>
     <div class="chips" data-single>${[['price','Цена'],['days','Срок'],['r','Рейтинг'],['ins','Страховка']].map(([k,l])=>`<button class="chip ${st.carrierSort===k?'on':''}" data-act="carrierSort" data-a="${k}">${l}</button>`).join('')}</div>
-    <div data-single class="stack" style="gap:8px">${list.map(c=>`<button class="card row top-a ${st.carrier===c.n?'on':''}" data-act="carrier" data-a="${c.n}" style="justify-content:flex-start;gap:12px;${st.carrier===c.n?'box-shadow:inset 0 0 0 2px var(--primary)':''}"><span class="thumb" style="width:44px;height:44px"></span><div class="stack grow"><span class="t">${c.n}</span><span class="xs mt4">★ ${c.r} · ${c.days} ${c.days===4?'дня':c.days===2||c.days===3?'дня':'дней'}${c.x?' · '+c.x:''}</span></div><b style="font:700 12px Inter">${money(c.price)} ₽</b></button>`).join('')}</div>`,
+    <div data-single class="stack" style="gap:8px">${list.map(c=>{const no=(st.failed||[]).includes(c.n);return `<button class="card row top-a ${st.carrier===c.n?'on':''}" data-act="carrier" data-a="${c.n}" ${no?'disabled':''} style="justify-content:flex-start;gap:12px;${no?'opacity:.5;':''}${st.carrier===c.n?'box-shadow:inset 0 0 0 2px var(--primary)':''}"><span class="thumb" style="width:44px;height:44px"></span><div class="stack grow"><span class="t">${c.n}</span><span class="xs mt4">★ ${c.r} · ${c.days} ${c.days===4?'дня':c.days===2||c.days===3?'дня':'дней'}${c.x?' · '+c.x:''}</span></div><b style="font:700 12px Inter">${no?'Нет машин на '+st.load+' авг':money(c.price)+' ₽'}</b></button>`}).join('')}</div>`,
   foot:B(`Забронировать «${st.carrier}»`,'data-act="bookCarrier"')})});
 
 def('W32',3,'Бронь не подтверждена',()=>page({
@@ -1215,7 +1234,8 @@ def('W39',3,'Для родителей',()=>{const j=st.joined;return page({tab:
 def('W40',3,'Бытовые услуги',()=>page({tab:'plan',
   top:H('Бытовые услуги'),
   body:`${[['internet','Интернет','3 провайдера в вашем доме'],['master','Мастер на час','Сантехник, электрик, сборка мебели'],['uk','Управляющая компания','ГБУ «Жилищник» · +7 495 000-00-00'],['boxes','Вывоз коробок','От 1 500 ₽']].map(([k,t,s])=>`<button class="card" data-act="info" data-a="${k}"><div class="row"><span class="t">${t}</span>${more()}</div><div class="xs mt4">${s}</div></button>`).join('')}
-    <div class="spacer"></div>${L('Прошёл месяц ›','data-go="W49"')}`}));
+    <div class="note">Через месяц агент спросит, как вы освоились</div>`}),
+  el=>{setTimeout(()=>{if(el.isConnected)push('через месяц','Месяц на новом месте! Как вы освоились? Оцените переезд',()=>go('W50'))},3500)});
 
 def('W50',3,'Оценка переезда (финиш)',()=>page({
   top:'',
@@ -1295,7 +1315,7 @@ function info(key){const [t,txt,btn]=INFO[key];openSheet(null,{html:`<div class=
 
 /* toast & push */
 let toastT;
-function toast(msg){let t=stage.querySelector('.toast');if(!t){t=document.createElement('div');t.className='toast';stage.appendChild(t)}t.textContent=msg;requestAnimationFrame(()=>t.classList.add('show'));clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),2300)}
+function toast(msg){let t=stage.querySelector('.toast');if(!t){t=document.createElement('div');t.className='toast';stage.appendChild(t)}t.textContent=msg;requestAnimationFrame(()=>t.classList.add('show'));clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),1900)}
 function push(title,text,onTap){
   const p=document.createElement('div');p.className='push';p.innerHTML=`<span class="ai"></span><div class="grow"><div class="pt">Переезд с семьёй<span>${title}</span></div><div class="px">${text}</div></div>`;
   stage.appendChild(p);requestAnimationFrame(()=>requestAnimationFrame(()=>p.classList.add('show')));
@@ -1336,7 +1356,7 @@ const ACT={
     st.profile.move=`${st.move.from} → ${st.move.to} · ${st.move.when.toLowerCase()}`;stack=[];go(currentHome(),{reset:true});toast('План переезда готов')},
   newMove:()=>{closeSheet(true);go('W08')},
   /* шаги */
-  stepDone:a=>{setStep(a);const [s]=a.split('.');const back={s1:'W72',s2:'W73',s3:'W74'}[s];
+  stepDone:a=>{if(a==='s1.district'&&!st.districtPicked)return toast('Сначала выберите район');setStep(a);const [s]=a.split('.');const back={s1:'W72',s2:'W73',s3:'W74'}[s];
     if(s==='s1'&&allDone(st.s1,S1)){toast('Этап 1 «Подготовка» готов')}
     if(s==='s3'&&a==='s3.cargo')toast('Перевозка вещей готова');
     returnTo(back)},
@@ -1344,9 +1364,9 @@ const ACT={
   skipYes:()=>{setStep(st.skipKey,'skip');closeSheet(true);const s=st.skipKey.split('.')[0];refresh();toast('Шаг пропущен — можно вернуться в любой момент')},
   cityTab:a=>{st.cityTab=a;refresh()},
   skipQ:()=>{st.qOpen=false;refresh();toast('Показываем популярные районы')},
-  dist:a=>{st.district=a;if(!st.s1.district)st.s1.district=.5;go('W14')},
+  dist:a=>{st.district=a;st.districtPicked=true;if(!st.s1.district)st.s1.district=.5;go('W14')},
   rooms:a=>{st.rooms=+a;refresh()},
-  roomsTo1:()=>{st.rooms=1;st.district='Хорошёво-Мнёвники';go('W14')},
+  roomsTo1:()=>{st.rooms=1;st.district='Хорошёво-Мнёвники';st.districtPicked=true;go('W14')},
   budgetDone:()=>{const b=calcBudget();if(b.month>st.budget)return go('W15');st.s1.budget=1;if(!done(st.s1.district))st.s1.district=1;if(allDone(st.s1,S1))toast('Этап 1 «Подготовка» готов');returnTo('W72')},
   keepBudget:()=>{st.s1.budget=1;if(!done(st.s1.district))st.s1.district=1;if(allDone(st.s1,S1))toast('Этап 1 «Подготовка» готов');returnTo('W72')},
   toFlats:()=>{st.variants.length?go('W18'):go('W16')},
@@ -1357,13 +1377,20 @@ const ACT={
   editSave:a=>{const v=sheetEl.querySelector('#editv').value.trim();if(a==='budget'){const n=parseInt(v.replace(/\D/g,''))||st.budget;st.budget=n;st.profile.home=`2 комнаты · до ${money(n)} ₽`}else st.profile[a]=v;closeSheet();refresh();toast('Сохранено — агент учтёт')},
   /* жильё */
   autopick:()=>{st.plus?go('W57'):(st.afterPay='W57',openSheet('W19'))},
-  addLink:()=>{const v=val('#flatlink').trim();if(!v||!/^https?:\/\/[^\s.]+\.[^\s]+/.test(v)||/example/.test(v)){st.badLink=v||'https://example-site.ru/flat/123';return go('W17')}
+  addLink:()=>{const v=val('#flatlink').trim();if(!v){curEl.querySelector('#flatlink').classList.add('err');curEl.querySelector('#linkerr').hidden=false;return}if(!/^https?:\/\/[^\s.]+\.[^\s]+/.test(v)||/example/.test(v)){st.badLink=v;return go('W17')}
     toast(addVariant()?'Объявление добавлено':'Это объявление уже в списке');go('W18',{replace:true})},
-  saveManual:()=>{const price=parseInt(val('#mprice').replace(/\D/g,''))||85000;const area=val('#marea')||'54';const rooms=(curEl.querySelector('.chips .on')||{}).textContent||'2';
-    const ok=addVariant({t:`${rooms}-комн., ${area} м²`,d:'Хорошёво',dl:'Хорошёво-Мнёвники',price,m:83,addr:val('#maddr')||'ул. Генерала Глаголева, 10'});toast(ok?'Вариант сохранён':'Такой вариант уже есть в списке');
+  saveManual:()=>{const addr=val('#maddr').trim();const price=parseInt(val('#mprice').replace(/\D/g,''));curEl.querySelector('#maddr').classList.toggle('err',!addr);curEl.querySelector('#mprice').classList.toggle('err',!price);if(!addr||!price){curEl.querySelector('#merr').hidden=false;return}const area=val('#marea')||'50';const rooms=(curEl.querySelector('.chips .on')||{}).textContent||'2';
+    const ok=addVariant({t:`${rooms}-комн., ${area} м²`,d:'Хорошёво',dl:'Хорошёво-Мнёвники',price,m:83,addr});toast(ok?'Вариант сохранён':'Такой вариант уже есть в списке');
     stack=stack.filter(x=>!['W58','W17','W16','W18'].includes(x));stack.push('W18');show('W18','back')},
   sort:a=>{st.sort=a;refresh()},
-  openVar:a=>{st.vi=+a;go('W24')},
+  need:a=>{const k=st.needs.indexOf(a);k>=0?st.needs.splice(k,1):st.needs.push(a);refresh()},
+  pickDistrict:a=>{st.district=a;st.districtPicked=true;if(!st.s1.district)st.s1.district=.5;toast('Район выбран: '+a);refresh()},
+  pickStart:()=>{st.pick=[];refresh()},
+  varMenu:a=>{const v=st.variants[+a];openSheet(null,{html:`<div class="h2" style="font-size:20px">${v.t} · ${v.d}</div><div class="s" style="color:var(--ink)">${money(v.price)} ₽/мес · ${v.addr}</div>`,foot:B('Открыть карточку',`data-act="openVar" data-a="${a}"`)+B('Удалить из списка',`data-act="delVar" data-a="${a}"`,'sec')})},
+  cancelView:()=>openSheet(null,{html:'<div class="h2" style="font-size:20px">Отменить просмотр?</div><div class="s" style="color:var(--ink)">Собственнику придёт СМС об отмене. Записаться снова можно из карточки квартиры</div>',foot:B('Отменить просмотр','data-act="cancelViewYes"')+B('Оставить','data-act="closeSheet"','sec')}),
+  cancelViewYes:()=>{closeSheet(true);st.booking.iso='';toast('Просмотр отменён, собственнику отправлено СМС');stack=stack.filter(x=>!['W59','W60','W83','W84'].includes(x));if(stack[stack.length-1]!=='W24')stack.push('W24');show('W24','back')},
+  saveTicket:()=>{const num=val('#tnum').trim(),tr=val('#ttrain').trim();if(!num&&!tr){curEl.querySelector('#terr').hidden=false;return}const mode=(curEl.querySelector('.chips .on')||{}).textContent||'Поезд';st.ticket={...st.ticket,mode,num,dep:val('#tdep'),arr:val('#tarr'),train:tr,short:tr?tr.split(',')[0]:'билет '+num};st.ticketSet=true;ACT.stepDone('s3.tickets')},
+  openVar:a=>{st.vi=+a;closeSheet(true);go('W24')},
   vi:a=>{st.vi=+a;refresh()},
   compare:()=>{st.cmp=null;if(st.variants.length<2)return toast('Добавьте хотя бы 2 варианта, чтобы сравнить');if(st.variants.length>3&&!st.plus){st.afterPay='W23';return openSheet('W19')}go('W23')},
   freeContinue:()=>{closeSheet();if(st.afterPay==='W23'&&curEl.dataset.id==='W18'){st.pick=[];refresh()}},
@@ -1386,7 +1413,7 @@ const ACT={
     stack=paths[a]||[a];show(a,'fade')},
   toBooking:()=>go(st.booking.fmt==='video'?'W83':'W59'),
   fmt:a=>{st.booking.fmt=a;go(a==='video'?'W83':'W59',{replace:true})},
-  saveBooking:()=>{st.booking.date=val('#bdate')||st.booking.date;st.booking.time=val('#btime')||st.booking.time;go(st.booking.fmt==='video'?'W84':'W60')},
+  saveBooking:()=>{const iso=val('#bdate'),tm=val('#btime');if(!iso||!tm){curEl.querySelector('#berr').hidden=false;return}const d=new Date(iso+'T12:00');st.booking.iso=iso;st.booking.date=d.getDate()+' '+MONTHS[d.getMonth()];st.booking.time=tm;go(st.booking.fmt==='video'?'W84':'W60')},
   askItem:(a,el)=>{if(el.classList.contains('done'))return;el.classList.add('done');el.textContent='✓'+el.textContent.slice(1);const n=curEl.querySelectorAll('.ask button.done').length;curEl.querySelector('#askn').textContent=n;curEl.querySelector('#askbar').style.width=n/5*100+'%'},
   shot:()=>{const s=curEl.querySelector('#shots');s.textContent=+s.textContent+1;toast('Снимок сохранён в карточку варианта')},
   ctog:(a,el)=>el.classList.toggle('off'),
@@ -1394,21 +1421,24 @@ const ACT={
   endCall:()=>{toast('Звонок завершён');stack.pop();go('W26')},
   rate:a=>{st.rate=+a;curEl.querySelectorAll('#stars button').forEach((b,i)=>b.classList.toggle('on',i<+a))},
   rate2:a=>{st.rate2=+a;curEl.querySelectorAll('#stars button').forEach((b,i)=>b.classList.toggle('on',i<+a))},
-  pickFlat:()=>{st.s2.view=1;st.s2.compare=st.s2.compare||1;go('W27')},
-  saveRate:()=>{st.s2.view=1;toast('Оценка сохранена — сводка обновлена');stack=['W18'];show('W18','fade')},
+  pickFlat:()=>{if(!st.rate)return toast('Сначала поставьте оценку квартире');st.s2.view=1;st.s2.compare=st.s2.compare||1;go('W27')},
+  saveRate:()=>{if(!st.rate)return toast('Сначала поставьте оценку квартире');st.s2.view=1;toast('Оценка сохранена — сводка обновлена');stack=['W18'];show('W18','fade')},
   checkDeal:()=>{if(!st.plus){st.afterPay='W27';return openSheet('W19')}toast('Проверка запущена — результат придёт через 10 минут')},
-  confirmDeal:()=>go('W29'),
+  confirmDeal:()=>{const left=[...curEl.querySelectorAll('[data-cl] .chk:not(.on) .t')].map(e=>e.textContent);if(curEl.dataset.id!=='W27'||!left.length){st.dealLeft=curEl.dataset.id==='W27'?0:(st.dealLeft||0);return go('W29')}
+    openSheet(null,{html:`<div class="h2" style="font-size:20px">Не проверено: ${plur(left.length,'пункт','пункта','пунктов')}</div><ul style="margin:4px 0 0 18px;font-size:13.5px;line-height:1.6">${left.map(x=>`<li>${x}</li>`).join('')}</ul><div class="s" style="color:var(--ink)">Без этого можно потерять залог или спорить о мебели при выезде. Проверьте до подписания</div>`,foot:B('Вернуться к проверке','data-act="closeSheet"')+B('Всё равно подтвердить',`data-act="confirmForce" data-a="${left.length}"`,'sec')})},
+  confirmForce:a=>{st.dealLeft=+a;closeSheet(true);go('W29')},
   flatDone:()=>{st.s2.check=1;Object.keys(st.s2).forEach(k=>{if(!done(st.s2[k]))st.s2[k]=1});toast('Этап 2 «Подбор жилья» готов');stack=[currentHome()];show(stack[0],'fade')},
   /* переезд */
   pickTickets:()=>{st.plus?go('W77'):(st.afterPay='W77',openSheet('W19'))},
   ticketPick:a=>{st.ticketPick=+a;refresh()},
-  ticketApply:()=>{st.ticket={...TICKETS[st.ticketPick],num:'7012 3456 7890'};toast('Билеты выбраны: '+st.ticket.short);back()},
-  day:a=>{const d=+a;if(d>=14){st.deliver=d}else st.load=d;refresh()},
+  ticketApply:()=>{st.ticket={...TICKETS[st.ticketPick],num:'7012 3456 7890'};st.ticketSet=true;toast('Билеты выбраны: '+st.ticket.short);back()},
+  day:a=>{const d=+a;const m=st.calMode||'load';if(m==='load'){if(d>st.deliver)return toast('Загрузка не может быть позже доставки');st.load=d;st.calMode='deliver'}else{if(d<st.load)return toast('Доставка не может быть раньше загрузки');st.deliver=d}refresh()},
+  calMode:a=>{st.calMode=a;refresh()},
   showCarriers:()=>{st.s3.cargo=.5;go('W31')},
   carrierSort:a=>{st.carrierSort=a;refresh()},
   carrier:a=>{st.carrier=a;refresh()},
-  bookCarrier:()=>{if(st.carrier==='ГрузТранс'&&st.carrierTry===0){st.carrierTry=1;st.failedCarrier='ГрузТранс';return go('W32')}st.booked=st.carrier;toast('Бронь подтверждена: «'+st.carrier+'»');go('W33',{replace:true});setTimeout(()=>push('сейчас','Груз прибудет завтра с 12 до 16'),1800)},
-  carrierRebook:a=>{st.carrier=a;st.booked=a;stack.pop();toast('Бронь подтверждена: «'+a+'»');go('W33',{replace:true})},
+  bookCarrier:()=>{st.failed=st.failed||[];if(st.carrier==='ГрузТранс'&&!st.failed.includes('ГрузТранс')){st.failed.push('ГрузТранс');st.failedCarrier='ГрузТранс';st.carrier=(CARRIERS.find(c=>!st.failed.includes(c.n))||{}).n;return go('W32')}st.booked=st.carrier;toast('Бронь подтверждена: «'+st.carrier+'»');go('W33',{replace:true});setTimeout(()=>push('сейчас','Груз прибудет завтра с 12 до 16'),1800)},
+  carrierRebook:a=>{st.carrier=a;st.booked=a;st.s3.cargo=.5;stack.pop();toast('Бронь подтверждена: «'+a+'»');go('W33',{replace:true})},
   tdir:a=>{st.tdir=a;refresh()},
   orderTransfer:()=>{st.s3.transfer=1;toast('Трансфер заказан на 14 и 15 августа');returnTo('W74')},
   photo:a=>{st.photos[a]++;refresh();toast('Фото добавлено')},
@@ -1433,7 +1463,7 @@ const ACT={
   doc:a=>{st.docOpen=a;go('DOC')},
   upload:a=>{const f=document.getElementById('file');f.onchange=()=>{const file=f.files[0];if(!file)return;
       if(a==='doc'){st.uploads.push({k:'u'+Date.now(),t:file.name.replace(/\.[^.]+$/,''),s:'Загружено только что'});refresh();toast('Документ загружен')}
-      else if(a==='ticket'){toast('Билет «'+file.name+'» сохранён в «Документы»')}
+      else if(a==='ticket'){st.ticket={...TICKETS[0],num:'7012 3456 7890'};st.ticketSet=true;refresh();toast('Билет распознан и сохранён в «Документы»')}
       else toast('Фото добавлено');f.value=''};f.click()},
   plan:a=>{st.plan=a;refresh()},
   applyPlan:()=>{st.tariff=st.plan;toast('Тариф изменён. Письмо с подтверждением на почте');back()},
@@ -1465,7 +1495,7 @@ let jt=0,jtT;
 
 /* делегирование кликов */
 stage.addEventListener('click',e=>{
-  const t=e.target.closest('[data-act],[data-go],[data-tg],[data-chk],[data-sw]');if(!t||!stage.contains(t))return;
+  const t=e.target.closest('[data-act],[data-go],[data-tg],[data-chk],[data-chkbox],[data-sw]');if(!t||!stage.contains(t))return;
   // сначала вложенные действия внутри чекбокса (Подробнее ›)
   if(t.dataset.act){
     const single=t.closest('[data-single]');
@@ -1476,7 +1506,7 @@ stage.addEventListener('click',e=>{
   if(t.hasAttribute('data-tg')){const single=t.closest('[data-single]');if(single){single.querySelectorAll('.chip').forEach(b=>b.classList.toggle('on',b===t))}else t.classList.toggle('on');
     const p=t.closest('[data-act-tg="nowhen"]');if(p){const w=curEl.querySelector('#mwhen');w.disabled=t.classList.contains('on');w.style.opacity=w.disabled?.45:1}return}
   if(t.hasAttribute('data-sw')){t.classList.toggle('on');return}
-  if(t.hasAttribute('data-chk')){t.classList.toggle('on');const cl=t.closest('[data-cl]');if(cl){const n=cl.querySelectorAll('.chk.on').length,tot=+cl.dataset.total;
+  if(t.hasAttribute('data-chkbox')||t.hasAttribute('data-chk')){const row=t.hasAttribute('data-chkbox')?t.closest('.chk'):t;row.classList.toggle('on');const cl=row.closest('[data-cl]');if(cl){const n=cl.querySelectorAll('.chk.on').length,tot=+cl.dataset.total;
     curEl.querySelectorAll('[data-cnt]').forEach(x=>x.textContent=x.dataset.cnt.replace('{n}',n));curEl.querySelectorAll('[data-clbar] i').forEach(x=>x.style.width=n/tot*100+'%');
     if(cl.dataset.key)st[cl.dataset.key]=n}}
 });
