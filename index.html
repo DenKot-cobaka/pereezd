@@ -415,8 +415,16 @@ const allDone=(o,keys)=>keys.every(k=>done(o[k]));
 const pct=(o,keys)=>keys.reduce((a,k)=>a+(done(o[k])?1:(o[k]||0)),0)/keys.length*100;
 const count=(o,keys)=>keys.filter(k=>done(o[k])).length;
 const money=n=>n.toLocaleString('ru-RU').replace(/[  ]/g,' ');
-const ensureVariants=()=>{if(!st.variants.length)st.variants=VARIANTS.map(v=>({...v}))};
-const curVar=()=>{ensureVariants();return st.variants[Math.min(st.vi,st.variants.length-1)]};
+const ensureVariants=()=>{if(!st.variants.length&&!st.varInit){st.variants=VARIANTS.map(v=>({...v}))}st.varInit=true};
+const curVar=()=>{ensureVariants();return st.variants[Math.min(st.vi,st.variants.length-1)]||{...VARIANTS[0]}};
+/* варианты, которые попадут в сравнение: выбранные бесплатно или все (Семья+ / не больше 3) */
+const cmpList=()=>{ensureVariants();const sel=(st.cmp||[]).map(i=>st.variants[i]).filter(Boolean);return sel.length>=2?sel:st.variants};
+const EXTRA=[
+  {t:'2-комн., 51 м²',d:'Хорошёво',dl:'Хорошёво-Мнёвники',price:83000,school:450,m:85,addr:'ул. Живописная, 8',work:38,park:'✓'},
+  {t:'2-комн., 56 м²',d:'Митино',dl:'Митино',price:80000,school:350,m:87,addr:'ул. Митинская, 33',work:52,park:'✓'},
+  {t:'1-комн., 42 м²',d:'Хорошёво',dl:'Хорошёво-Мнёвники',price:72000,school:500,m:78,addr:'ул. Куусинена, 4',work:40,park:'—'},
+  {t:'3-комн., 70 м²',d:'Ясенево',dl:'Ясенево',price:95000,school:600,m:80,addr:'Новоясеневский пр., 12',work:47,park:'лес'},
+];
 
 function currentHome(){
   if(allDone(st.s3,S3)) return 'W65';
@@ -679,7 +687,7 @@ SHEETS.W19={map:0,name:'Пейволл Семья+ (шторка)',html:()=>`<di
   <div class="s" style="color:var(--ink)">Пройти весь путь можно бесплатно — вручную. Семья+ делает рутину за вас:</div>
   <div class="ticks">${['Автоподбор квартир и билетов','Сравнение без лимита и сводки агента','Проверка собственника и договора','Мониторинг 24/7: пуш о новых вариантах и снижении цены'].map(t=>`<div>${I.tick}<span>${t}</span></div>`).join('')}</div>
   <div class="xs">XXX ₽ в месяц · отключить можно в любой момент в профиле</div>`,
-  foot:()=>B('Оформить Семья+','data-act="toPay"')+B('Продолжить бесплатно','data-act="closeSheet"','sec')};
+  foot:()=>B('Оформить Семья+','data-act="toPay"')+B(st.afterPay==='W23'?'Сравнить 3 бесплатно':'Продолжить бесплатно','data-act="freeContinue"','sec')};
 
 def('W20',0,'Оплата (внешний модуль)',()=>page({
   top:H('Оплата',{agent:false}),
@@ -862,12 +870,21 @@ def('W58',2,'Добавить вручную',()=>page({
     <div class="row" style="justify-content:flex-start;gap:12px;margin-top:6px"><button class="add-ph" data-act="upload" data-a="photo">+ Фото</button><span class="xs">Фото помогут агенту сравнить варианты</span></div>`,
   foot:B('Сохранить вариант','data-act="saveManual"')}));
 
-def('W18',2,'Список сравнения',()=>{ensureVariants();const v=[...st.variants];const sk={m:(a,b)=>b.m-a.m,price:(a,b)=>a.price-b.price,school:(a,b)=>a.school-b.school}[st.sort];v.sort(sk);return page({tab:'flat',
-  top:H('Мои варианты · '+v.length,{back:false,right:`<button class="rb" data-go="W16" aria-label="Добавить">${I.plus}</button>`}),
-  body:`<div class="chips" data-single>${[['m','По совпадению'],['price','Цена'],['school','Школа ближе']].map(([k,l])=>`<button class="chip ${st.sort===k?'on':''}" data-act="sort" data-a="${k}">${l}</button>`).join('')}</div>
-    ${v.map(x=>`<button class="card row top-a" data-act="openVar" data-a="${st.variants.indexOf(x)}" style="justify-content:flex-start;gap:12px"><span class="thumb"></span><div class="stack grow"><span class="t">${x.t} · ${x.d}</span><span class="xs mt4">${money(x.price)} ₽ · школа ${x.school} м · ${x.m}%</span></div>${more()}</button>`).join('')}
-    <div class="note">${st.plus?'С Семья+ сравнение без лимита':'Бесплатно можно сравнивать до 3 вариантов'}</div>`,
-  foot:B('Сравнить с агентом','data-act="compare"')+B('+ Добавить вариант','data-go="W16"','sec')})});
+def('W18',2,'Список сравнения',()=>{ensureVariants();const v=[...st.variants];const sk={m:(a,b)=>b.m-a.m,price:(a,b)=>a.price-b.price,school:(a,b)=>a.school-b.school}[st.sort];v.sort(sk);
+  const pick=Array.isArray(st.pick);const n=pick?st.pick.length:0;
+  const card=x=>{const i=st.variants.indexOf(x);const on=pick&&st.pick.includes(i);
+    return `<div class="card row top-a" role="button" tabindex="0" data-act="${pick?'pickVar':'openVar'}" data-a="${i}" style="justify-content:flex-start;gap:12px;cursor:pointer;${on?'box-shadow:inset 0 0 0 2px var(--primary)':''}">
+      ${pick?`<span class="box" style="margin-top:16px;${on?'background:var(--primary);border-color:var(--primary)':''}">${I.check.replace('<svg','<svg style="opacity:'+(on?1:0)+'"')}</span>`:''}<span class="thumb"></span>
+      <div class="stack grow"><span class="t">${x.t} · ${x.d}</span><span class="xs mt4">${money(x.price)} ₽ · школа ${x.school} м · ${x.m}%</span></div>
+      ${pick?'':`<div class="stack" style="align-items:flex-end;gap:10px">${more()}<button class="more" style="color:var(--soft);font-weight:500" data-act="delVar" data-a="${i}">Удалить</button></div>`}</div>`};
+  return page({tab:'flat',
+  top:H('Мои варианты · '+v.length,{back:false,right:pick?'<span></span>':`<button class="rb" data-go="W16" aria-label="Добавить">${I.plus}</button>`}),
+  body:`${pick?`<div class="card" style="padding:11px 14px"><span class="t" style="font-size:14px">Бесплатное сравнение</span><div class="xs mt4">Отметьте до 3 вариантов — агент сравнит их. Остальные останутся в списке</div></div>`
+      :`<div class="chips" data-single>${[['m','По совпадению'],['price','Цена'],['school','Школа ближе']].map(([k,l])=>`<button class="chip ${st.sort===k?'on':''}" data-act="sort" data-a="${k}">${l}</button>`).join('')}</div>`}
+    ${v.map(card).join('')||'<div class="note center mt16">В списке пока пусто</div>'}
+    ${pick?'':`<div class="note">${st.plus?'С Семья+ сравнение без лимита':'Бесплатно можно сравнивать до 3 вариантов'}</div>`}`,
+  foot:pick?B(`Сравнить выбранные · ${n} из 3`,n>=2?'data-act="compareFree"':'disabled')+L('Отмена','data-act="pickCancel"')
+    :B('Сравнить с агентом','data-act="compare"')+B('+ Добавить вариант','data-go="W16"','sec')})});
 
 def('W57',2,'Автоподбор',()=>page({tab:'flat',
   top:H('Автоподбор'),
@@ -877,7 +894,7 @@ def('W57',2,'Автоподбор',()=>page({tab:'flat',
     <div class="spacer"></div>${L('Изменить критерии поиска','data-go="W55"')}`,
   foot:B('Добавить все в сравнение','data-act="addAllAuto"')}));
 
-def('W23',2,'Сводка агента',()=>{ensureVariants();const v=[...st.variants].sort((a,b)=>b.m-a.m);const n=v.length;const best=st.variants.indexOf(v[0]);return page({
+def('W23',2,'Сводка агента',()=>{const v=[...cmpList()].sort((a,b)=>b.m-a.m);const n=v.length;const best=st.variants.indexOf(v[0]);return page({
   top:H('Сводка агента'),
   body:`${AG(`Лучше всего вам подходит №1: школа в ${v[0].school} м, парк рядом и в рамках бюджета`)}
     <div style="overflow-x:auto;margin:0 -16px;padding:0 16px;scrollbar-width:none"><div class="tbl" style="--n:${n};min-width:${n>3?110+n*86:0}px">
@@ -896,7 +913,7 @@ def('W24',2,'Карточка варианта',()=>{const v=curVar();const top3
     <div class="card"><div class="row"><span class="t">${v.sn}</span><b style="font:700 12px Inter">${v.school} м</b></div><div class="s">${v.sr}</div></div>
     <div class="card"><div class="row"><span class="t">${v.kg}</span><b style="font:700 12px Inter">${v.kgd} м</b></div><div class="s">${v.kgs}</div></div>
     <div class="card"><div class="row"><span class="t">Полная стоимость</span><b style="font:700 12px Inter">${money(v.full)} ₽</b></div><div class="s">Залог, комиссия, ЖКУ</div></div>`,
-  foot:B('Записаться на просмотр','data-act="toBooking"')+B('Открыть объявление на площадке '+I.ext.replace('<svg','<svg width="16" height="16"'),'data-go="W61"','sec')})});
+  foot:B('Записаться на просмотр','data-act="toBooking"')+B('Открыть объявление на площадке '+I.ext.replace('<svg','<svg width="16" height="16"'),'data-go="W61"','sec')+L('Удалить из списка',`data-act="delVar" data-a="${st.vi}"`)})});
 
 def('W61',2,'Площадка аренды (внешний модуль)',()=>{const v=curVar();return page({
   top:'',
@@ -1219,6 +1236,7 @@ function build(id){
 }
 function show(id,mode){
   stage.querySelectorAll('.push').forEach(p=>p.remove());
+  if(id!=='W18')st.pick=null;
   const el=build(id);
   const old=curEl;
   if(mode==='fwd'){el.classList.add('from-r')}
@@ -1339,14 +1357,23 @@ const ACT={
   /* жильё */
   autopick:()=>{st.plus?go('W57'):(st.afterPay='W57',openSheet('W19'))},
   addLink:()=>{const v=val('#flatlink').trim();if(!v||!/^https?:\/\/[^\s.]+\.[^\s]+/.test(v)||/example/.test(v)){st.badLink=v||'https://example-site.ru/flat/123';return go('W17')}
-    addVariant();toast('Объявление добавлено');go('W18',{replace:true})},
+    toast(addVariant()?'Объявление добавлено':'Это объявление уже в списке');go('W18',{replace:true})},
   saveManual:()=>{const price=parseInt(val('#mprice').replace(/\D/g,''))||85000;const area=val('#marea')||'54';const rooms=(curEl.querySelector('.chips .on')||{}).textContent||'2';
-    addVariant({t:`${rooms}-комн., ${area} м²`,d:'Хорошёво',dl:'Хорошёво-Мнёвники',price,addr:val('#maddr')||'ул. Генерала Глаголева, 10'});toast('Вариант сохранён');
+    const ok=addVariant({t:`${rooms}-комн., ${area} м²`,d:'Хорошёво',dl:'Хорошёво-Мнёвники',price,m:83,addr:val('#maddr')||'ул. Генерала Глаголева, 10'});toast(ok?'Вариант сохранён':'Такой вариант уже есть в списке');
     stack=stack.filter(x=>!['W58','W17','W16','W18'].includes(x));stack.push('W18');show('W18','back')},
   sort:a=>{st.sort=a;refresh()},
   openVar:a=>{st.vi=+a;go('W24')},
   vi:a=>{st.vi=+a;refresh()},
-  compare:()=>{if(st.variants.length>3&&!st.plus){st.afterPay='W23';return openSheet('W19')}go('W23')},
+  compare:()=>{st.cmp=null;if(st.variants.length>3&&!st.plus){st.afterPay='W23';return openSheet('W19')}go('W23')},
+  freeContinue:()=>{closeSheet();if(st.afterPay==='W23'&&curEl.dataset.id==='W18'){st.pick=[];refresh()}},
+  pickVar:a=>{const i=+a;const p=st.pick;const k=p.indexOf(i);if(k>=0)p.splice(k,1);else if(p.length>=3)return toast('Бесплатно — не больше 3 вариантов');else p.push(i);refresh()},
+  pickCancel:()=>{st.pick=null;refresh()},
+  compareFree:()=>{st.cmp=[...st.pick];st.pick=null;go('W23')},
+  delVar:a=>{const v=st.variants[+a];if(!v)return;openSheet(null,{html:`<div class="h2" style="font-size:20px">Удалить вариант?</div><div class="s" style="color:var(--ink)">${v.t} · ${v.d}, ${money(v.price)} ₽/мес. Его можно будет добавить снова по ссылке</div>`,
+    foot:B('Удалить',`data-act="delYes" data-a="${a}"`)+B('Отмена','data-act="closeSheet"','sec')})},
+  delYes:a=>{const i=+a;st.variants.splice(i,1);st.cmp=null;st.vi=Math.max(0,Math.min(st.vi,st.variants.length-1));closeSheet(true);toast('Вариант удалён');
+    if(!st.variants.length){st.s2.add=0;stack=['W16'];return show('W16','fade')}
+    if(curEl.dataset.id==='W24'){stack=stack.filter(x=>x!=='W24');if(stack[stack.length-1]!=='W18')stack.push('W18');return show('W18','back')}refresh()},
   addAuto:a=>{const x=AUTO[+a];if(!st.variants.some(v=>v.addr===x.addr)){st.variants.push({...x});st.s2.add=1;toast('Добавлено в сравнение')}refresh()},
   addAllAuto:()=>{ensureVariants();AUTO.forEach(x=>{if(!st.variants.some(v=>v.addr===x.addr))st.variants.push({...x})});st.s2.add=1;toast('Все варианты добавлены');stack=['W18'];show('W18','fade')},
   toPay:()=>{closeSheet(true);go('W20')},
@@ -1426,9 +1453,13 @@ function reply(t){
   if(/документ/i.test(t)) return 'Для переезда понадобятся паспорта, свидетельства о рождении детей, договор аренды и медкарта ребёнка. Я веду чек-лист во вкладке «Документы».';
   return 'Учту это в анкете. Могу показать подходящие районы на карте, сравнить их или посчитать бюджет.';
 }
-function addVariant(x){ensureVariants();const base=VARIANTS[0];const n=x||{t:'2-комн., 51 м²',d:'Хорошёво',dl:'Хорошёво-Мнёвники',price:83000,addr:'ул. Живописная, 8'};
-  if(!x&&st.variants.length===3&&!st._addedFirst){st._addedFirst=1;st.s2.add=1;return}
-  st.variants.push({...base,school:450,m:85,full:n.price+6000,owner:'Николай',floor:'5/9 эт.',...n});st.s2.add=1}
+function addVariant(x){const fresh=!st.varInit;ensureVariants();st.s2.add=1;
+  if(!x&&fresh)return true; // первая ссылка — стартовые 3 варианта
+  const base=VARIANTS[0];
+  const n=x||[...VARIANTS,...EXTRA].find(e=>!st.variants.some(v=>v.addr===e.addr));
+  if(!n)return false;
+  if(st.variants.some(v=>v.addr===n.addr&&v.t===n.t))return false;
+  st.variants.push({...base,school:450,m:84,owner:'Николай',floor:'5/9 эт.',sn:'Школа №1234',sr:'Рейтинг 4.7',...n,full:n.price+6000});return true}
 function returnTo(id){const i=stack.lastIndexOf(id);if(i>=0){stack=stack.slice(0,i+1);show(id,'back')}else{stack.pop();stack.push(id);show(id,'back')}}
 let jt=0,jtT;
 
