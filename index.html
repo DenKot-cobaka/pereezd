@@ -415,10 +415,11 @@ const allDone=(o,keys)=>keys.every(k=>done(o[k]));
 const pct=(o,keys)=>keys.reduce((a,k)=>a+(done(o[k])?1:(o[k]||0)),0)/keys.length*100;
 const count=(o,keys)=>keys.filter(k=>done(o[k])).length;
 const money=n=>n.toLocaleString('ru-RU').replace(/[  ]/g,' ');
-const ensureVariants=()=>{if(!st.variants.length&&!st.varInit){st.variants=VARIANTS.map(v=>({...v}))}st.varInit=true};
-const curVar=()=>{ensureVariants();return st.variants[Math.min(st.vi,st.variants.length-1)]||{...VARIANTS[0]}};
+/* демо-данные: только для быстрого перехода по экранам, в обычном сценарии список пуст, пока пользователь сам не добавит */
+const ensureVariants=()=>{if(!st.variants.length)st.variants=VARIANTS.map(v=>({...v}))};
+const curVar=()=>{return st.variants[Math.min(st.vi,st.variants.length-1)]||{...VARIANTS[0]}};
 /* варианты, которые попадут в сравнение: выбранные бесплатно или все (Семья+ / не больше 3) */
-const cmpList=()=>{ensureVariants();const sel=(st.cmp||[]).map(i=>st.variants[i]).filter(Boolean);return sel.length>=2?sel:st.variants};
+const cmpList=()=>{const sel=(st.cmp||[]).map(i=>st.variants[i]).filter(Boolean);return sel.length>=2?sel:st.variants};
 const EXTRA=[
   {t:'2-комн., 51 м²',d:'Хорошёво',dl:'Хорошёво-Мнёвники',price:83000,school:450,m:85,addr:'ул. Живописная, 8',work:38,park:'✓'},
   {t:'2-комн., 56 м²',d:'Митино',dl:'Митино',price:80000,school:350,m:87,addr:'ул. Митинская, 33',work:52,park:'✓'},
@@ -831,12 +832,12 @@ def('W15',1,'Бюджет превышен',()=>{const b=calcBudget();const over
   foot:B('Показать районы дешевле','data-go="W13"')+B('Изменить бюджет','data-act="edit" data-a="budget"','sec')+L('Оставить как есть','data-act="keepBudget"')})});
 
 /* ---------- Карта 2: Подбор жилья ---------- */
-def('W73',2,'Этап 2 · Подбор жилья',()=>{const s=st.s2,c=count(s,S2),nk=nextKey(s,S2);const lbl={add:'добавить варианты',compare:'сравнение',view:'просмотр',check:'проверка договора'};const go={add:st.variants.length?'W18':'W16',compare:'W18',view:'W24',check:'W27'};return page({
+def('W73',2,'Этап 2 · Подбор жилья',()=>{const s=st.s2,c=count(s,S2),nk=nextKey(s,S2);const lbl={add:'добавить варианты',compare:'сравнение',view:'просмотр',check:'проверка договора'};const has=st.variants.length>0;const go={add:has?'W18':'W16',compare:has?'W18':'W16',view:has?'W24':'W16',check:'W27'};return page({
   top:H('Подбор жилья'),
   body:`<div class="card"><div class="xs">Этап 2 из 3</div><div style="font:700 12px Inter;margin:2px 0 8px">${c===4?'Этап готов':'Сделано '+c+' из 4'}</div>${BAR(pct(s,S2))}</div>
     ${stepRow('Добавить варианты',st.variants.length?st.variants.length+' варианта в списке':'С любых сайтов или вручную',st.variants.length?'Изменить':'Начать',s.add,`data-go="${go.add}"`)}
-    ${stepRow('Сравнить и выбрать','Сводка агента по вариантам',done(s.compare)?'Изменить':'Продолжить',s.compare||(s.add?.5:0),'data-go="W18"')}
-    ${stepRow('Записаться на просмотр','Лично или по видеозвонку',done(s.view)?'Изменить':'Начать',s.view,'data-go="W24"')}
+    ${stepRow('Сравнить и выбрать','Сводка агента по вариантам',done(s.compare)?'Изменить':'Продолжить',s.compare||(s.add?.5:0),`data-go="${go.compare}"`)}
+    ${stepRow('Записаться на просмотр','Лично или по видеозвонку',done(s.view)?'Изменить':'Начать',s.view,`data-go="${go.view}"`)}
     ${stepRow('Проверить договор','Мошенничество, залог, опись',done(s.check)?'Изменить':'Начать',s.check,'data-go="W27"')}
     <div class="note">Шаги можно проходить в любом порядке. После шага вы возвращаетесь сюда</div>`,
   foot:nk?(L(`Пропустить шаг «${S2N[nk][0]}»`,`data-act="skip" data-a="s2.${nk}"`)+B('Продолжить: '+lbl[nk],`data-go="${go[nk]}"`)+L('На главную','data-act="home"')):B('На главную','data-act="home"')})});
@@ -870,7 +871,7 @@ def('W58',2,'Добавить вручную',()=>page({
     <div class="row" style="justify-content:flex-start;gap:12px;margin-top:6px"><button class="add-ph" data-act="upload" data-a="photo">+ Фото</button><span class="xs">Фото помогут агенту сравнить варианты</span></div>`,
   foot:B('Сохранить вариант','data-act="saveManual"')}));
 
-def('W18',2,'Список сравнения',()=>{ensureVariants();const v=[...st.variants];const sk={m:(a,b)=>b.m-a.m,price:(a,b)=>a.price-b.price,school:(a,b)=>a.school-b.school}[st.sort];v.sort(sk);
+def('W18',2,'Список сравнения',()=>{const v=[...st.variants];const sk={m:(a,b)=>b.m-a.m,price:(a,b)=>a.price-b.price,school:(a,b)=>a.school-b.school}[st.sort];v.sort(sk);
   const pick=Array.isArray(st.pick);const n=pick?st.pick.length:0;
   const card=x=>{const i=st.variants.indexOf(x);const on=pick&&st.pick.includes(i);
     return `<div class="card row top-a" role="button" tabindex="0" data-act="${pick?'pickVar':'openVar'}" data-a="${i}" style="justify-content:flex-start;gap:12px;cursor:pointer;${on?'box-shadow:inset 0 0 0 2px var(--primary)':''}">
@@ -894,7 +895,7 @@ def('W57',2,'Автоподбор',()=>page({tab:'flat',
     <div class="spacer"></div>${L('Изменить критерии поиска','data-go="W55"')}`,
   foot:B('Добавить все в сравнение','data-act="addAllAuto"')}));
 
-def('W23',2,'Сводка агента',()=>{const v=[...cmpList()].sort((a,b)=>b.m-a.m);const n=v.length;const best=st.variants.indexOf(v[0]);return page({
+def('W23',2,'Сводка агента',()=>{const v=[...cmpList()].sort((a,b)=>b.m-a.m);if(v.length<2)return page({top:H('Сводка агента'),body:`<div class="spacer"></div>${AG('Чтобы сравнить, добавьте хотя бы 2 варианта — по ссылке с любого сайта или вручную')}<div class="spacer"></div>`,foot:B('Добавить вариант','data-go="W16"')});const n=v.length;const best=st.variants.indexOf(v[0]);return page({
   top:H('Сводка агента'),
   body:`${AG(`Лучше всего вам подходит №1: школа в ${v[0].school} м, парк рядом и в рамках бюджета`)}
     <div style="overflow-x:auto;margin:0 -16px;padding:0 16px;scrollbar-width:none"><div class="tbl" style="--n:${n};min-width:${n>3?110+n*86:0}px">
@@ -1364,7 +1365,7 @@ const ACT={
   sort:a=>{st.sort=a;refresh()},
   openVar:a=>{st.vi=+a;go('W24')},
   vi:a=>{st.vi=+a;refresh()},
-  compare:()=>{st.cmp=null;if(st.variants.length>3&&!st.plus){st.afterPay='W23';return openSheet('W19')}go('W23')},
+  compare:()=>{st.cmp=null;if(st.variants.length<2)return toast('Добавьте хотя бы 2 варианта, чтобы сравнить');if(st.variants.length>3&&!st.plus){st.afterPay='W23';return openSheet('W19')}go('W23')},
   freeContinue:()=>{closeSheet();if(st.afterPay==='W23'&&curEl.dataset.id==='W18'){st.pick=[];refresh()}},
   pickVar:a=>{const i=+a;const p=st.pick;const k=p.indexOf(i);if(k>=0)p.splice(k,1);else if(p.length>=3)return toast('Бесплатно — не больше 3 вариантов');else p.push(i);refresh()},
   pickCancel:()=>{st.pick=null;refresh()},
@@ -1375,12 +1376,12 @@ const ACT={
     if(!st.variants.length){st.s2.add=0;stack=['W16'];return show('W16','fade')}
     if(curEl.dataset.id==='W24'){stack=stack.filter(x=>x!=='W24');if(stack[stack.length-1]!=='W18')stack.push('W18');return show('W18','back')}refresh()},
   addAuto:a=>{const x=AUTO[+a];if(!st.variants.some(v=>v.addr===x.addr)){st.variants.push({...x});st.s2.add=1;toast('Добавлено в сравнение')}refresh()},
-  addAllAuto:()=>{ensureVariants();AUTO.forEach(x=>{if(!st.variants.some(v=>v.addr===x.addr))st.variants.push({...x})});st.s2.add=1;toast('Все варианты добавлены');stack=['W18'];show('W18','fade')},
+  addAllAuto:()=>{AUTO.forEach(x=>{if(!st.variants.some(v=>v.addr===x.addr))st.variants.push({...x})});st.s2.add=1;toast('Все варианты добавлены');stack=['W18'];show('W18','fade')},
   toPay:()=>{closeSheet(true);go('W20')},
   pay:()=>{const c=val('#card').replace(/\D/g,''),e=val('#exp'),v=val('#cvc');st.cardLast=c.slice(-4)||'4417';
     if(c.length<16||e.length<5||v.length<3)return go('W21',{replace:true});
     st.plus=true;go('W22',{replace:true});setTimeout(()=>push('сейчас','Семья+ активна до 28 ноября'),700)},
-  plusGo:a=>{if(['W23','W18','W27'].includes(a))ensureVariants();const h=currentHome();
+  plusGo:a=>{const h=currentHome();
     const paths={W23:['W18','W23'],W18:['W18'],W57:['W18','W57'],W77:[h,'W74','W76','W77'],W27:[h,'W73','W27']};
     stack=paths[a]||[a];show(a,'fade')},
   toBooking:()=>go(st.booking.fmt==='video'?'W83':'W59'),
@@ -1453,8 +1454,7 @@ function reply(t){
   if(/документ/i.test(t)) return 'Для переезда понадобятся паспорта, свидетельства о рождении детей, договор аренды и медкарта ребёнка. Я веду чек-лист во вкладке «Документы».';
   return 'Учту это в анкете. Могу показать подходящие районы на карте, сравнить их или посчитать бюджет.';
 }
-function addVariant(x){const fresh=!st.varInit;ensureVariants();st.s2.add=1;
-  if(!x&&fresh)return true; // первая ссылка — стартовые 3 варианта
+function addVariant(x){st.s2.add=1;
   const base=VARIANTS[0];
   const n=x||[...VARIANTS,...EXTRA].find(e=>!st.variants.some(v=>v.addr===e.addr));
   if(!n)return false;
@@ -1497,7 +1497,7 @@ function presetFor(id){
   return null;
 }
 function jumpTo(id){
-  const p=presetFor(id);if(p){st=fresh();PRESETS[p]();if(['W48','W26','W27','W28','W29','W23','W24','W59','W60','W83','W84','W85','W25','W61'].includes(id))ensureVariants();if(['W82'].includes(id)){}}
+  const p=presetFor(id);if(p){st=fresh();PRESETS[p]();if(['W18','W48','W26','W27','W28','W29','W23','W24','W59','W60','W83','W84','W85','W25','W61'].includes(id))ensureVariants();if(['W82'].includes(id)){}}
   closeSheet(true);
   if(SHEETS[id]){const base=currentHome();stack=[base];show(base,'fade');return setTimeout(()=>openSheet(id),50)}
   const h=currentHome();stack=HOME_IDS.includes(id)?[h]:[h,id];show(HOME_IDS.includes(id)?h:id,'fade');
